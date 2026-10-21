@@ -1,0 +1,365 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>토익 스터디</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<style>
+  :root {
+    --bg: #f6f5f1; --surface: #ffffff; --ink: #1c1b19; --muted: #6b6860; --line: #e4e1d8;
+    --accent: #2f5bd3; --accent-soft: #e6ecfb; --good: #1f8a5b; --good-soft: #e3f4ec;
+    --bad: #c8463b; --bad-soft: #fbe9e7;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #131416; --surface: #1c1e21; --ink: #ecebe7; --muted: #9a978f; --line: #2c2f33;
+            --accent: #7d9cff; --accent-soft: #1f2741; --good: #4fc58f; --good-soft: #15302a;
+            --bad: #ff8277; --bad-soft: #3a1f1d; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font-family: Pretendard, -apple-system, "Apple SD Gothic Neo", sans-serif; }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 24px 16px 60px; }
+  a { color: var(--accent); }
+  .top { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .back { text-decoration: none; font-size: 14px; color: var(--muted); }
+  h1 { margin: 6px 0 0; font-size: 28px; letter-spacing: -.02em; }
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 20px 0; }
+  .stat { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px; }
+  .stat .k { font-size: 12px; color: var(--muted); }
+  .stat .v { font-size: 24px; font-weight: 800; margin-top: 4px; }
+  .stat .s { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .tabs { display: flex; gap: 6px; border-bottom: 1px solid var(--line); margin-bottom: 18px; overflow-x: auto; }
+  .tabs button { background: none; border: none; padding: 10px 14px; font: inherit; font-weight: 600;
+                 color: var(--muted); border-bottom: 2px solid transparent; cursor: pointer; white-space: nowrap; }
+  .tabs button.on { color: var(--ink); border-color: var(--accent); }
+  .panel { display: none; } .panel.on { display: block; }
+  .box { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 18px; margin-bottom: 14px; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  input, select { font: inherit; padding: 9px 11px; border-radius: 10px; border: 1px solid var(--line);
+                  background: var(--bg); color: var(--ink); min-width: 0; }
+  button.btn { font: inherit; font-weight: 600; padding: 9px 14px; border-radius: 10px; border: 1px solid var(--line);
+               background: var(--surface); color: var(--ink); cursor: pointer; }
+  button.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.btn:disabled { opacity: .4; cursor: default; }
+  .muted { color: var(--muted); font-size: 13px; }
+  /* flashcard */
+  .flash { min-height: 200px; display: grid; place-items: center; text-align: center; cursor: pointer;
+           user-select: none; }
+  .flash .w { font-size: 34px; font-weight: 800; letter-spacing: -.01em; }
+  .flash .m { font-size: 20px; margin-top: 10px; }
+  .flash .ex { font-size: 14px; color: var(--muted); margin-top: 8px; font-style: italic; }
+  .choices { display: grid; gap: 8px; margin-top: 14px; }
+  .choices button { text-align: left; font: inherit; padding: 12px 14px; border-radius: 12px;
+                    border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; }
+  .choices button.ok { background: var(--good-soft); border-color: var(--good); }
+  .choices button.no { background: var(--bad-soft); border-color: var(--bad); }
+  .progress { height: 6px; background: var(--line); border-radius: 9px; overflow: hidden; margin: 10px 0; }
+  .progress i { display: block; height: 100%; background: var(--accent); width: 0; transition: width .2s; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; }
+  td .x { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 16px; }
+  .chart svg { width: 100%; height: auto; display: block; }
+  .pill { display: inline-block; font-size: 12px; padding: 2px 8px; border-radius: 99px; background: var(--bad-soft); color: var(--bad); }
+  @media (max-width: 520px) { .stat .v { font-size: 20px; } .flash .w { font-size: 28px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="../">← 도구 모음</a>
+  <div class="top"><h1>📘 토익 스터디</h1></div>
+
+  <div class="stats">
+    <div class="stat"><div class="k">시험까지</div><div class="v" id="sDday">—</div><div class="s" id="sDate">날짜 미설정</div></div>
+    <div class="stat"><div class="k">최근 점수</div><div class="v" id="sScore">—</div><div class="s" id="sGap">목표 850</div></div>
+    <div class="stat"><div class="k">연속 공부</div><div class="v" id="sStreak">0일</div><div class="s" id="sToday">오늘 기록 없음</div></div>
+  </div>
+
+  <div class="tabs">
+    <button data-t="cards" class="on">플래시카드</button>
+    <button data-t="quiz">퀴즈</button>
+    <button data-t="words">단어장</button>
+    <button data-t="log">점수·공부 기록</button>
+    <button data-t="settings">설정</button>
+  </div>
+
+  <!-- 플래시카드 -->
+  <section class="panel on" id="p-cards">
+    <div class="row" style="justify-content:space-between">
+      <select id="cardSet">
+        <option value="all">전체 단어</option>
+        <option value="wrong">오답 단어만</option>
+        <option value="mine">내가 추가한 단어만</option>
+      </select>
+      <span class="muted" id="cardPos"></span>
+    </div>
+    <div class="box flash" id="flash" style="margin-top:12px"></div>
+    <div class="row" style="justify-content:center">
+      <button class="btn" id="cPrev">← 이전</button>
+      <button class="btn" id="cShuffle">섞기</button>
+      <button class="btn" id="cWrong">오답에 넣기</button>
+      <button class="btn primary" id="cNext">다음 →</button>
+    </div>
+    <p class="muted" style="text-align:center">카드를 누르면 뜻이 보여요 · 키보드 ←/→, Space</p>
+  </section>
+
+  <!-- 퀴즈 -->
+  <section class="panel" id="p-quiz">
+    <div class="box" id="quizStart">
+      <div class="row">
+        <select id="qSet"><option value="all">전체 단어</option><option value="wrong">오답 단어만</option></select>
+        <select id="qN"><option>10</option><option selected>20</option><option>30</option></select>
+        <select id="qDir"><option value="en">영어 → 뜻</option><option value="ko">뜻 → 영어</option></select>
+        <button class="btn primary" id="qGo">시작</button>
+      </div>
+      <p class="muted">틀린 단어는 자동으로 오답 단어에 들어가고, 오답 퀴즈에서 맞히면 빠져요.</p>
+    </div>
+    <div class="box" id="quizBody" hidden>
+      <div class="row" style="justify-content:space-between"><span id="qPos" class="muted"></span><span id="qScore" class="muted"></span></div>
+      <div class="progress"><i id="qBar"></i></div>
+      <div class="flash" style="min-height:110px;cursor:default"><div class="w" id="qWord"></div></div>
+      <div class="choices" id="qChoices"></div>
+      <div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn primary" id="qNext" disabled>다음</button></div>
+    </div>
+  </section>
+
+  <!-- 단어장 -->
+  <section class="panel" id="p-words">
+    <div class="box">
+      <div class="row">
+        <input id="wEn" placeholder="영단어" style="flex:1 1 140px">
+        <input id="wKo" placeholder="뜻" style="flex:1 1 140px">
+        <input id="wEx" placeholder="예문/메모 (선택)" style="flex:2 1 200px">
+        <button class="btn primary" id="wAdd">추가</button>
+      </div>
+    </div>
+    <div class="row" style="margin-bottom:10px">
+      <input id="wSearch" placeholder="검색" style="flex:1">
+      <select id="wFilter"><option value="all">전체</option><option value="wrong">오답만</option><option value="mine">내가 추가</option></select>
+    </div>
+    <div class="box" style="padding:6px 12px"><table><thead><tr><th>단어</th><th>뜻</th><th></th></tr></thead><tbody id="wList"></tbody></table></div>
+  </section>
+
+  <!-- 기록 -->
+  <section class="panel" id="p-log">
+    <div class="box">
+      <div class="muted" style="margin-bottom:8px">모의고사 점수</div>
+      <div class="row">
+        <input type="date" id="lDate">
+        <input type="number" id="lLC" placeholder="LC 점수" min="5" max="495" style="width:120px">
+        <input type="number" id="lRC" placeholder="RC 점수" min="5" max="495" style="width:120px">
+        <input id="lMemo" placeholder="메모 (교재/회차)" style="flex:1 1 140px">
+        <button class="btn primary" id="lAdd">저장</button>
+      </div>
+    </div>
+    <div class="box">
+      <div class="muted" style="margin-bottom:8px">오늘 공부 시간</div>
+      <div class="row">
+        <input type="number" id="tMin" placeholder="분" min="1" style="width:100px">
+        <select id="tKind"><option>LC</option><option>RC</option><option>단어</option><option>모의고사</option></select>
+        <button class="btn primary" id="tAdd">기록</button>
+        <span class="muted" id="tTodaySum"></span>
+      </div>
+    </div>
+    <div class="box chart"><div class="muted" style="margin-bottom:6px">점수 추이 (점선 = 목표)</div><div id="chart"></div></div>
+    <div class="box" style="padding:6px 12px"><table><thead><tr><th>날짜</th><th>LC</th><th>RC</th><th>합계</th><th>메모</th><th></th></tr></thead><tbody id="lList"></tbody></table></div>
+  </section>
+
+  <!-- 설정 -->
+  <section class="panel" id="p-settings">
+    <div class="box">
+      <div class="row"><label style="width:90px">시험 날짜</label><input type="date" id="setDate"></div>
+      <div class="row" style="margin-top:10px"><label style="width:90px">목표 점수</label><input type="number" id="setGoal" min="10" max="990" step="5" style="width:120px"></div>
+      <div class="row" style="margin-top:12px"><button class="btn primary" id="setSave">저장</button></div>
+    </div>
+    <div class="box">
+      <div class="muted" style="margin-bottom:8px">백업 — 기록은 이 브라우저에만 저장돼요. 기기를 옮기거나 캐시를 지우기 전에 내보내 두세요.</div>
+      <div class="row">
+        <button class="btn" id="exp">JSON 내보내기</button>
+        <label class="btn" style="cursor:pointer">JSON 불러오기<input type="file" id="imp" accept=".json" hidden></label>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script src="words.js"></script>
+<script>
+const KEY = 'toeic-study-v1';
+const $ = id => document.getElementById(id);
+const ymd = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const today = () => ymd(new Date());
+
+let S = { examDate: '', goal: 850, mine: [], wrong: [], hidden: [], scores: [], study: [] };
+try { Object.assign(S, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch (e) {}
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} renderStats(); };
+
+const allWords = () => [...BASE_WORDS.map(w => ({ ...w, mine: false })), ...S.mine.map(w => ({ ...w, mine: true }))]
+  .filter(w => !S.hidden.includes(w.en));
+const isWrong = w => S.wrong.includes(w.en);
+const pick = set => { const a = allWords(); return set === 'wrong' ? a.filter(isWrong) : set === 'mine' ? a.filter(w => w.mine) : a; };
+const shuffle = a => { a = [...a]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+// ---- 상단 통계
+function renderStats() {
+  if (S.examDate) {
+    const diff = Math.ceil((new Date(S.examDate + 'T00:00:00') - new Date(today() + 'T00:00:00')) / 864e5);
+    $('sDday').textContent = diff > 0 ? `D-${diff}` : diff === 0 ? 'D-DAY' : `D+${-diff}`;
+    $('sDate').textContent = S.examDate;
+  } else { $('sDday').textContent = '—'; $('sDate').textContent = '설정 탭에서 지정'; }
+  const sc = [...S.scores].sort((a, b) => a.date.localeCompare(b.date));
+  if (sc.length) { const t = sc.at(-1).lc + sc.at(-1).rc; $('sScore').textContent = t;
+    $('sGap').textContent = t >= S.goal ? `목표 ${S.goal} 달성 🎉` : `목표까지 ${S.goal - t}점`; }
+  else { $('sScore').textContent = '—'; $('sGap').textContent = `목표 ${S.goal}`; }
+  const days = new Set(S.study.map(s => s.date));
+  let streak = 0, d = new Date(today() + 'T00:00:00');
+  if (!days.has(today())) d.setDate(d.getDate() - 1);
+  while (days.has(ymd(d))) { streak++; d.setDate(d.getDate() - 1); }
+  $('sStreak').textContent = streak + '일';
+  const tm = S.study.filter(s => s.date === today()).reduce((a, s) => a + s.min, 0);
+  $('sToday').textContent = tm ? `오늘 ${tm}분` : '오늘 기록 없음';
+  $('tTodaySum').textContent = tm ? `오늘 합계 ${tm}분` : '';
+}
+
+// ---- 탭
+document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('on', x === b));
+  document.querySelectorAll('.panel').forEach(p => p.classList.toggle('on', p.id === 'p-' + b.dataset.t));
+  if (b.dataset.t === 'words') renderWords();
+  if (b.dataset.t === 'log') renderLog();
+  if (b.dataset.t === 'cards') loadCards();
+});
+
+// ---- 플래시카드
+let deck = [], ci = 0, flipped = false;
+function loadCards(sh) { deck = pick($('cardSet').value); if (sh) deck = shuffle(deck); ci = Math.min(ci, Math.max(0, deck.length - 1)); flipped = false; drawCard(); }
+function drawCard() {
+  const f = $('flash');
+  if (!deck.length) { f.innerHTML = '<div class="muted">이 목록에 단어가 없어요</div>'; $('cardPos').textContent = ''; return; }
+  const w = deck[ci];
+  f.innerHTML = `<div><div class="w">${esc(w.en)}</div>${flipped ? `<div class="m">${esc(w.ko)}</div>${w.ex ? `<div class="ex">${esc(w.ex)}</div>` : ''}` : '<div class="muted" style="margin-top:12px">탭해서 뜻 보기</div>'}</div>`;
+  $('cardPos').textContent = `${ci + 1} / ${deck.length}${isWrong(w) ? ' · 오답' : ''}`;
+  $('cWrong').textContent = isWrong(w) ? '오답에서 빼기' : '오답에 넣기';
+}
+$('flash').onclick = () => { flipped = !flipped; drawCard(); };
+$('cNext').onclick = () => { if (deck.length) { ci = (ci + 1) % deck.length; flipped = false; drawCard(); } };
+$('cPrev').onclick = () => { if (deck.length) { ci = (ci - 1 + deck.length) % deck.length; flipped = false; drawCard(); } };
+$('cShuffle').onclick = () => { ci = 0; loadCards(true); };
+$('cardSet').onchange = () => { ci = 0; loadCards(); };
+$('cWrong').onclick = () => { const w = deck[ci]; if (!w) return;
+  S.wrong = isWrong(w) ? S.wrong.filter(x => x !== w.en) : [...S.wrong, w.en]; save(); drawCard(); };
+document.addEventListener('keydown', e => {
+  if (!$('p-cards').classList.contains('on') || e.target.tagName === 'INPUT') return;
+  if (e.key === 'ArrowRight') $('cNext').click();
+  else if (e.key === 'ArrowLeft') $('cPrev').click();
+  else if (e.key === ' ') { e.preventDefault(); $('flash').click(); }
+});
+
+// ---- 퀴즈
+let Q = null;
+$('qGo').onclick = () => {
+  const pool = pick($('qSet').value), all = allWords();
+  if (pool.length < 1 || all.length < 4) { alert('퀴즈를 만들 단어가 부족해요'); return; }
+  Q = { items: shuffle(pool).slice(0, +$('qN').value), i: 0, ok: 0, dir: $('qDir').value, all, set: $('qSet').value };
+  $('quizStart').hidden = true; $('quizBody').hidden = false; drawQ();
+};
+function drawQ() {
+  const w = Q.items[Q.i], key = Q.dir === 'en' ? 'ko' : 'en';
+  $('qWord').textContent = Q.dir === 'en' ? w.en : w.ko;
+  $('qPos').textContent = `${Q.i + 1} / ${Q.items.length}`; $('qScore').textContent = `정답 ${Q.ok}`;
+  $('qBar').style.width = (Q.i / Q.items.length * 100) + '%';
+  const opts = shuffle([w, ...shuffle(Q.all.filter(x => x.en !== w.en)).slice(0, 3)]);
+  $('qChoices').innerHTML = '';
+  opts.forEach(o => { const b = document.createElement('button'); b.textContent = o[key];
+    b.onclick = () => answer(o, b); $('qChoices').appendChild(b); });
+  $('qNext').disabled = true;
+}
+function answer(o, btn) {
+  const w = Q.items[Q.i], key = Q.dir === 'en' ? 'ko' : 'en';
+  [...$('qChoices').children].forEach(b => { b.disabled = true; if (b.textContent === w[key]) b.classList.add('ok'); });
+  if (o.en === w.en) { Q.ok++; if (Q.set === 'wrong') S.wrong = S.wrong.filter(x => x !== w.en); }
+  else { btn.classList.add('no'); if (!S.wrong.includes(w.en)) S.wrong.push(w.en); }
+  save(); $('qScore').textContent = `정답 ${Q.ok}`; $('qNext').disabled = false; $('qNext').focus();
+}
+$('qNext').onclick = () => {
+  Q.i++;
+  if (Q.i < Q.items.length) return drawQ();
+  $('qBar').style.width = '100%';
+  $('qWord').textContent = `${Q.items.length}문제 중 ${Q.ok}개 정답 (${Math.round(Q.ok / Q.items.length * 100)}%)`;
+  $('qChoices').innerHTML = ''; $('qNext').disabled = true;
+  const again = document.createElement('button'); again.textContent = '다시 하기';
+  again.onclick = () => { $('quizBody').hidden = true; $('quizStart').hidden = false; }; $('qChoices').appendChild(again);
+};
+
+// ---- 단어장
+function renderWords() {
+  const q = $('wSearch').value.trim().toLowerCase();
+  const list = pick($('wFilter').value).filter(w => !q || w.en.toLowerCase().includes(q) || w.ko.includes(q));
+  $('wList').innerHTML = list.map(w => `<tr><td><b>${esc(w.en)}</b> ${isWrong(w) ? '<span class="pill">오답</span>' : ''}${w.ex ? `<div class="muted">${esc(w.ex)}</div>` : ''}</td><td>${esc(w.ko)}</td><td style="text-align:right"><button class="x" title="삭제" data-en="${esc(w.en)}">×</button></td></tr>`).join('')
+    || '<tr><td colspan="3" class="muted">단어가 없어요</td></tr>';
+  $('wList').querySelectorAll('.x').forEach(b => b.onclick = () => {
+    const en = b.dataset.en;
+    if (S.mine.some(w => w.en === en)) S.mine = S.mine.filter(w => w.en !== en); else S.hidden.push(en);
+    S.wrong = S.wrong.filter(x => x !== en); save(); renderWords();
+  });
+}
+$('wAdd').onclick = () => {
+  const en = $('wEn').value.trim(), ko = $('wKo').value.trim();
+  if (!en || !ko) return;
+  S.mine = S.mine.filter(w => w.en !== en); S.hidden = S.hidden.filter(x => x !== en);
+  S.mine.push({ en, ko, ex: $('wEx').value.trim() }); save();
+  $('wEn').value = $('wKo').value = $('wEx').value = ''; $('wEn').focus(); renderWords();
+};
+$('wKo').onkeydown = $('wEx').onkeydown = e => { if (e.key === 'Enter') $('wAdd').click(); };
+$('wSearch').oninput = $('wFilter').onchange = renderWords;
+
+// ---- 기록
+function renderLog() {
+  const sc = [...S.scores].sort((a, b) => b.date.localeCompare(a.date));
+  $('lList').innerHTML = sc.map(s => `<tr><td>${s.date}</td><td>${s.lc}</td><td>${s.rc}</td><td><b>${s.lc + s.rc}</b></td><td class="muted">${esc(s.memo)}</td><td style="text-align:right"><button class="x" data-id="${s.id}">×</button></td></tr>`).join('')
+    || '<tr><td colspan="6" class="muted">아직 기록이 없어요</td></tr>';
+  $('lList').querySelectorAll('.x').forEach(b => b.onclick = () => { S.scores = S.scores.filter(s => s.id != b.dataset.id); save(); renderLog(); });
+  drawChart();
+}
+function drawChart() {
+  const sc = [...S.scores].sort((a, b) => a.date.localeCompare(b.date));
+  if (!sc.length) { $('chart').innerHTML = '<div class="muted">점수를 기록하면 그래프가 그려져요</div>'; return; }
+  const W = 640, H = 220, P = { l: 40, r: 14, t: 14, b: 26 };
+  const tot = sc.map(s => s.lc + s.rc);
+  const lo = Math.max(0, Math.floor((Math.min(...tot, S.goal) - 60) / 50) * 50), hi = Math.min(990, Math.ceil((Math.max(...tot, S.goal) + 30) / 50) * 50);
+  const x = i => P.l + (sc.length === 1 ? (W - P.l - P.r) / 2 : i * (W - P.l - P.r) / (sc.length - 1));
+  const y = v => P.t + (1 - (v - lo) / (hi - lo)) * (H - P.t - P.b);
+  let g = '';
+  for (let v = lo; v <= hi; v += 50) g += `<line x1="${P.l}" x2="${W - P.r}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)"/><text x="${P.l - 6}" y="${y(v) + 4}" text-anchor="end" font-size="11" fill="var(--muted)">${v}</text>`;
+  g += `<line x1="${P.l}" x2="${W - P.r}" y1="${y(S.goal)}" y2="${y(S.goal)}" stroke="var(--good)" stroke-dasharray="5 4" stroke-width="1.5"/>`;
+  g += `<polyline fill="none" stroke="var(--accent)" stroke-width="2.5" points="${tot.map((v, i) => `${x(i)},${y(v)}`).join(' ')}"/>`;
+  tot.forEach((v, i) => { g += `<circle cx="${x(i)}" cy="${y(v)}" r="4" fill="var(--accent)"><title>${sc[i].date}: ${v} (LC ${sc[i].lc} / RC ${sc[i].rc})</title></circle>`;
+    if (sc.length <= 8 || i === 0 || i === sc.length - 1) g += `<text x="${x(i)}" y="${H - 8}" text-anchor="middle" font-size="11" fill="var(--muted)">${sc[i].date.slice(5)}</text>`; });
+  $('chart').innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="점수 추이">${g}</svg>`;
+}
+$('lDate').value = today();
+$('lAdd').onclick = () => {
+  const lc = +$('lLC').value, rc = +$('lRC').value;
+  if (!$('lDate').value || !(lc >= 5 && lc <= 495 && rc >= 5 && rc <= 495)) { alert('날짜와 LC/RC 점수(5~495)를 입력해 주세요'); return; }
+  S.scores.push({ id: Date.now(), date: $('lDate').value, lc, rc, memo: $('lMemo').value.trim() });
+  $('lLC').value = $('lRC').value = $('lMemo').value = ''; save(); renderLog();
+};
+$('tAdd').onclick = () => { const m = +$('tMin').value; if (!(m > 0)) return;
+  S.study.push({ date: today(), min: m, kind: $('tKind').value }); $('tMin').value = ''; save(); };
+
+// ---- 설정 / 백업
+$('setDate').value = S.examDate; $('setGoal').value = S.goal;
+$('setSave').onclick = () => { S.examDate = $('setDate').value; S.goal = +$('setGoal').value || 850; save(); alert('저장했어요'); };
+$('exp').onclick = () => {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(S, null, 2)], { type: 'application/json' }));
+  a.download = `toeic-backup-${today()}.json`; a.click();
+};
+$('imp').onchange = e => { const f = e.target.files[0]; if (!f) return;
+  f.text().then(t => { try { Object.assign(S, JSON.parse(t)); save(); location.reload(); } catch (err) { alert('파일을 읽을 수 없어요'); } }); };
+
+renderStats(); loadCards();
+</script>
+</body>
+</html>

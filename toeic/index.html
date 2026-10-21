@@ -134,6 +134,25 @@
         <button class="btn primary" id="wAdd">추가</button>
       </div>
     </div>
+    <details class="box" id="bulk">
+      <summary style="cursor:pointer;font-weight:600">📥 한꺼번에 가져오기 (엑셀 업로드 / 붙여넣기)</summary>
+      <div style="margin:12px 0 6px;font-weight:600">엑셀 파일 올리기</div>
+      <p class="muted" style="margin:0 0 8px">시트마다 <b>영어 | 뜻</b>이 나란히 있으면 자동으로 찾아서 시트별(Day별)로 묶어요. 영어만 있는 시험지 시트는 건너뛰어요. 암호 걸린 파일은 암호를 풀어서 올려주세요. 파일은 서버로 가지 않고 이 브라우저에서만 처리돼요.</p>
+      <div class="row">
+        <input id="fPrefix" placeholder="묶음 앞에 붙일 이름 (예: 해커스)" style="flex:1 1 200px">
+        <label class="btn primary" style="cursor:pointer">파일 선택 (.xlsx/.csv)<input type="file" id="fXlsx" accept=".xlsx,.xls,.csv" hidden></label>
+      </div>
+      <div class="muted" id="fMsg" style="margin:8px 0 14px"></div>
+      <div style="margin:4px 0 6px;font-weight:600">붙여넣기</div>
+      <p class="muted" style="margin:10px 0 8px">엑셀·노션·메모장에서 복사해서 붙여넣으면 돼요. 한 줄에 단어 하나:<br>
+        <code>abandon&nbsp;&nbsp;버리다, 포기하다</code> 또는 탭/<code>|</code>로 구분 (3번째 칸은 예문)</p>
+      <div class="row">
+        <input id="bGroup" placeholder="묶음 이름 (예: 해커스 Day 1)" style="flex:1 1 220px">
+        <button class="btn primary" id="bGo">가져오기</button>
+      </div>
+      <textarea id="bText" rows="7" placeholder="여기에 붙여넣기" style="width:100%;margin-top:10px;font:inherit;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink)"></textarea>
+      <div class="muted" id="bMsg" style="margin-top:8px"></div>
+    </details>
     <div class="row" style="margin-bottom:10px">
       <input id="wSearch" placeholder="검색" style="flex:1">
       <select id="wFilter"><option value="all">전체</option><option value="wrong">오답만</option><option value="mine">내가 추가</option></select>
@@ -168,6 +187,25 @@
 
   <!-- 설정 -->
   <section class="panel" id="p-settings">
+    <div class="box" id="cloudBox">
+      <div style="font-weight:700;margin-bottom:6px">☁️ 클라우드 동기화</div>
+      <div class="muted" id="cStatus">확인 중…</div>
+      <div id="cAuth" hidden style="margin-top:10px">
+        <div class="row">
+          <input type="email" id="cEmail" placeholder="이메일" autocomplete="username" style="flex:1 1 180px">
+          <input type="password" id="cPw" placeholder="비밀번호 (6자 이상)" autocomplete="current-password" style="flex:1 1 140px">
+        </div>
+        <div class="row" style="margin-top:8px">
+          <button class="btn primary" id="cLogin">로그인</button>
+          <button class="btn" id="cSignup">처음이면 가입</button>
+        </div>
+      </div>
+      <div id="cOut" hidden style="margin-top:10px">
+        <div class="row"><span id="cWho" class="muted"></span>
+          <button class="btn" id="cSync">지금 동기화</button>
+          <button class="btn" id="cLogout">로그아웃</button></div>
+      </div>
+    </div>
     <div class="box">
       <div class="row"><label style="width:90px">시험 날짜</label><input type="date" id="setDate"></div>
       <div class="row" style="margin-top:10px"><label style="width:90px">목표 점수</label><input type="number" id="setGoal" min="10" max="990" step="5" style="width:120px"></div>
@@ -184,6 +222,9 @@
 </div>
 
 <script src="words.js"></script>
+<script src="xlsx.full.min.js"></script>
+<script src="../vendor/supabase.js"></script>
+<script src="../config.js"></script>
 <script>
 const KEY = 'toeic-study-v1';
 const $ = id => document.getElementById(id);
@@ -192,12 +233,34 @@ const today = () => ymd(new Date());
 
 let S = { examDate: '', goal: 850, mine: [], wrong: [], hidden: [], scores: [], study: [] };
 try { Object.assign(S, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch (e) {}
-const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} renderStats(); };
+const save = fromPull => {
+  if (fromPull !== true) S._ts = Date.now();
+  try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {}
+  renderStats();
+  if (fromPull !== true && typeof cloudSchedule === 'function') cloudSchedule();
+};
 
-const allWords = () => [...BASE_WORDS.map(w => ({ ...w, mine: false })), ...S.mine.map(w => ({ ...w, mine: true }))]
-  .filter(w => !S.hidden.includes(w.en));
+const BASE = BASE_WORDS.map(w => ({ group: '기본 빈출', ...w }));
+const allWords = () => {
+  const mineKeys = new Set(S.mine.map(w => w.en.toLowerCase()));
+  return [...BASE.filter(w => !mineKeys.has(w.en.toLowerCase())).map(w => ({ ...w, mine: false })), ...S.mine.map(w => ({ ...w, mine: true }))]
+    .filter(w => !S.hidden.includes(w.en));
+};
 const isWrong = w => S.wrong.includes(w.en);
-const pick = set => { const a = allWords(); return set === 'wrong' ? a.filter(isWrong) : set === 'mine' ? a.filter(w => w.mine) : a; };
+const pick = set => { const a = allWords();
+  if (set === 'wrong') return a.filter(isWrong);
+  if (set === 'mine') return a.filter(w => w.mine);
+  if (set.startsWith('g:')) return a.filter(w => w.group === set.slice(2));
+  return a; };
+const groups = () => [...new Set([...BASE, ...S.mine].map(w => w.group).filter(Boolean))];
+function refreshGroups() {
+  ['cardSet', 'qSet', 'wFilter'].forEach(id => {
+    const el = $(id), cur = el.value;
+    el.querySelectorAll('option[data-g]').forEach(o => o.remove());
+    groups().forEach(g => { const o = document.createElement('option'); o.value = 'g:' + g; o.textContent = '📂 ' + g; o.dataset.g = 1; el.appendChild(o); });
+    if ([...el.options].some(o => o.value === cur)) el.value = cur;
+  });
+}
 const shuffle = a => { a = [...a]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -301,15 +364,66 @@ function renderWords() {
   $('wList').querySelectorAll('.x').forEach(b => b.onclick = () => {
     const en = b.dataset.en;
     if (S.mine.some(w => w.en === en)) S.mine = S.mine.filter(w => w.en !== en); else S.hidden.push(en);
-    S.wrong = S.wrong.filter(x => x !== en); save(); renderWords();
+    S.wrong = S.wrong.filter(x => x !== en); save(); refreshGroups(); renderWords();
   });
 }
 $('wAdd').onclick = () => {
   const en = $('wEn').value.trim(), ko = $('wKo').value.trim();
   if (!en || !ko) return;
   S.mine = S.mine.filter(w => w.en !== en); S.hidden = S.hidden.filter(x => x !== en);
-  S.mine.push({ en, ko, ex: $('wEx').value.trim() }); save();
+  S.mine.push({ en, ko, ex: $('wEx').value.trim() }); save(); refreshGroups();
   $('wEn').value = $('wKo').value = $('wEx').value = ''; $('wEn').focus(); renderWords();
+};
+function parseLine(line) {
+  line = line.trim(); if (!line) return null;
+  let en, ko, ex = '';
+  if (line.includes('\t') || line.includes('|')) {
+    const c = line.split(/\t|\|/).map(x => x.trim()).filter((x, i) => x || i < 2);
+    [en, ko, ex = ''] = c;
+  } else {
+    const m = line.search(/[가-힣]/); if (m < 1) return null;
+    en = line.slice(0, m).replace(/[\s:=\-–—,]+$/, ''); ko = line.slice(m);
+  }
+  en = (en || '').replace(/^\d+[\.\)]\s*/, '').trim(); ko = (ko || '').trim();
+  return en && ko ? { en, ko, ex: ex.trim() } : null;
+}
+$('fXlsx').onchange = async e => {
+  const f = e.target.files[0]; if (!f) return; const msg = $('fMsg'); msg.textContent = '읽는 중…';
+  try {
+    const wb = XLSX.read(await f.arrayBuffer(), { type: 'array' });
+    const pre = $('fPrefix').value.trim(); let total = 0, sheets = 0, skipped = 0;
+    const isEn = v => typeof v === 'string' && /[A-Za-z]/.test(v) && !/[가-힣]/.test(v);
+    const isKo = v => typeof v === 'string' && /[가-힣]/.test(v);
+    wb.SheetNames.forEach(name => {
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, defval: '', blankrows: false });
+      const words = [];
+      rows.forEach(r => { for (let i = 0; i < r.length - 1; i++)
+        if (isEn(r[i]) && isKo(r[i + 1])) { words.push({ en: r[i].trim(), ko: r[i + 1].trim(), ex: '' }); break; } });
+      if (!words.length) { skipped++; return; }
+      let title = '';
+      for (const r of rows.slice(0, 3)) { const c = r.find(v => typeof v === 'string' && /day\s*\d+/i.test(v)); if (c) { title = c.trim(); break; } }
+      title = (title || name).replace(/^day/i, 'Day').replace(/\s+/g, ' ');
+      const group = pre ? `${pre} ${title}` : title;
+      words.forEach(w => { S.mine = S.mine.filter(x => x.en !== w.en); S.hidden = S.hidden.filter(x => x !== w.en); S.mine.push({ ...w, group }); });
+      total += words.length; sheets++;
+    });
+    if (!total) { msg.textContent = '영어·뜻이 나란히 있는 칸을 찾지 못했어요.'; return; }
+    save(); refreshGroups(); renderWords();
+    msg.textContent = `${sheets}개 묶음, ${total}단어를 가져왔어요${skipped ? ` (단어 없는 시트 ${skipped}개 건너뜀)` : ''}.`;
+  } catch (err) {
+    msg.textContent = /password|encrypt/i.test(String(err)) ? '암호가 걸린 파일이에요. 엑셀에서 암호를 지우고 다시 저장해서 올려주세요.' : '파일을 읽지 못했어요: ' + err.message;
+  }
+  e.target.value = '';
+};
+$('bGo').onclick = () => {
+  const group = $('bGroup').value.trim(), rows = $('bText').value.split(/\r?\n/);
+  const ok = [], bad = [];
+  rows.forEach(r => { if (!r.trim()) return; const w = parseLine(r); w ? ok.push(w) : bad.push(r.trim()); });
+  if (!ok.length) { $('bMsg').textContent = '읽을 수 있는 줄이 없어요. 형식을 확인해 주세요.'; return; }
+  ok.forEach(w => { S.mine = S.mine.filter(x => x.en !== w.en); S.hidden = S.hidden.filter(x => x !== w.en); S.mine.push({ ...w, group }); });
+  save(); refreshGroups(); renderWords();
+  $('bMsg').textContent = `${ok.length}개 추가했어요${group ? ` → "${group}"` : ''}${bad.length ? ` · 건너뛴 줄 ${bad.length}개: ${bad.slice(0, 3).join(' / ')}${bad.length > 3 ? ' …' : ''}` : ''}`;
+  $('bText').value = '';
 };
 $('wKo').onkeydown = $('wEx').onkeydown = e => { if (e.key === 'Enter') $('wAdd').click(); };
 $('wSearch').oninput = $('wFilter').onchange = renderWords;
@@ -359,7 +473,84 @@ $('exp').onclick = () => {
 $('imp').onchange = e => { const f = e.target.files[0]; if (!f) return;
   f.text().then(t => { try { Object.assign(S, JSON.parse(t)); save(); location.reload(); } catch (err) { alert('파일을 읽을 수 없어요'); } }); };
 
-renderStats(); loadCards();
+// ================= 클라우드 동기화 (Supabase) =================
+const sb = (window.SUPABASE_URL && window.SUPABASE_ANON_KEY && window.supabase)
+  ? window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY) : null;
+let cUser = null, cTimer = null, cBusy = false;
+const cStatus = t => { $('cStatus').textContent = t; };
+const hasData = () => S.mine.length || S.scores.length || S.study.length || S.wrong.length || S.hidden.length;
+const hhmm = () => new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+function refreshAll() {
+  $('setDate').value = S.examDate; $('setGoal').value = S.goal;
+  refreshGroups(); renderStats(); loadCards(); renderWords(); renderLog();
+}
+function cloudSchedule() {
+  if (!sb || !cUser) return;
+  clearTimeout(cTimer); cStatus('변경사항 저장 대기 중…'); cTimer = setTimeout(cloudPush, 1200);
+}
+async function cloudPush() {
+  if (!sb || !cUser || cBusy) return; clearTimeout(cTimer); cTimer = null; cBusy = true;
+  try {
+    const ts = S._ts || Date.now();
+    const { error } = await sb.from('user_state').upsert({ user_id: cUser.id, data: S, updated_at: new Date(ts).toISOString() });
+    if (error) throw error;
+    try { localStorage.setItem('toeic-synced-' + cUser.id, '1'); } catch (e) {}
+    cStatus(`✅ 동기화됨 (${hhmm()})`);
+  } catch (e) { cStatus('⚠️ 저장 실패: ' + (e.message || e) + ' — 인터넷 연결을 확인해 주세요. 다시 시도: [지금 동기화]'); }
+  cBusy = false;
+}
+async function cloudPull() {
+  if (!sb || !cUser || cTimer) return;      // 아직 못 올린 변경이 있으면 덮어쓰지 않음
+  cStatus('동기화 중…');
+  const { data, error } = await sb.from('user_state').select('data,updated_at').maybeSingle();
+  if (error) { cStatus('⚠️ 불러오기 실패: ' + error.message); return; }
+  if (!data) { await cloudPush(); return; }
+  const remoteTs = Date.parse(data.updated_at);
+  let synced = false; try { synced = !!localStorage.getItem('toeic-synced-' + cUser.id); } catch (e) {}
+  let useRemote;
+  if (!synced && hasData()) {
+    useRemote = confirm('이 기기에도 데이터가 있고, 클라우드에도 데이터가 있어요.\n\n확인 = 클라우드 데이터 사용 (이 기기 데이터는 덮어써져요)\n취소 = 이 기기 데이터를 클라우드에 올림 (클라우드 데이터는 덮어써져요)');
+  } else useRemote = remoteTs > (S._ts || 0);
+  if (useRemote) {
+    Object.assign(S, { examDate: '', goal: 850, mine: [], wrong: [], hidden: [], scores: [], study: [] }, data.data);
+    S._ts = remoteTs; save(true); refreshAll();
+    try { localStorage.setItem('toeic-synced-' + cUser.id, '1'); } catch (e) {}
+    cStatus(`✅ 클라우드에서 불러옴 (${hhmm()})`);
+  } else await cloudPush();
+}
+function renderAuth() {
+  $('cAuth').hidden = !!cUser; $('cOut').hidden = !cUser;
+  if (cUser) $('cWho').textContent = cUser.email;
+}
+async function onSession(session) {
+  cUser = session ? session.user : null; renderAuth();
+  if (cUser) await cloudPull(); else cStatus('로그인하면 폰과 PC가 같은 데이터를 써요. (지금은 이 기기에만 저장 중)');
+}
+async function cloudInit() {
+  if (!sb) { cStatus('클라우드 미설정 — 지금은 이 기기에만 저장돼요. (설정 방법은 README 참고)'); return; }
+  const { data } = await sb.auth.getSession(); await onSession(data.session);
+  sb.auth.onAuthStateChange((ev, sess) => { const id = sess ? sess.user.id : null; if (id !== (cUser ? cUser.id : null)) onSession(sess); });
+  document.addEventListener('visibilitychange', () => {
+    if (!cUser) return;
+    if (document.visibilityState === 'hidden') { if (cTimer) cloudPush(); } else cloudPull();
+  });
+}
+$('cLogin').onclick = async () => {
+  if (!sb) return; cStatus('로그인 중…');
+  const { error } = await sb.auth.signInWithPassword({ email: $('cEmail').value.trim(), password: $('cPw').value });
+  if (error) cStatus('⚠️ ' + error.message);
+};
+$('cSignup').onclick = async () => {
+  if (!sb) return; cStatus('가입 중…');
+  const { data, error } = await sb.auth.signUp({ email: $('cEmail').value.trim(), password: $('cPw').value });
+  if (error) cStatus('⚠️ ' + error.message);
+  else if (!data.session) cStatus('📧 확인 메일을 보냈어요. 메일의 링크를 누른 뒤 [로그인]을 눌러주세요.');
+};
+$('cSync').onclick = async () => { clearTimeout(cTimer); cTimer = null; await cloudPush(); };
+$('cLogout').onclick = async () => { if (sb) await sb.auth.signOut(); };
+cloudInit();
+
+refreshGroups(); renderStats(); loadCards();
 </script>
 </body>
 </html>
